@@ -17,10 +17,18 @@ import type { Tile } from "@/lib/types/tile";
 interface TileModalProps {
   tiles: Tile[];
   open: boolean;
+  isSubmitting?: boolean;
+  onConfirmPurchase: () => void;
   onClose: () => void;
 }
 
-export function TileModal({ tiles, open, onClose }: TileModalProps) {
+export function TileModal({
+  tiles,
+  open,
+  isSubmitting = false,
+  onConfirmPurchase,
+  onClose,
+}: TileModalProps) {
   if (tiles.length === 0) {
     return null;
   }
@@ -81,7 +89,13 @@ export function TileModal({ tiles, open, onClose }: TileModalProps) {
         </Box>
       </DialogContent>
       <DialogActions>
-        {isAvailable ? <Button variant="contained">Buy {tiles.length > 1 ? "Tiles" : "Tile"}</Button> : <Button variant="outlined">View History</Button>}
+        {isAvailable ? (
+          <Button variant="contained" onClick={onConfirmPurchase} disabled={isSubmitting}>
+            {isSubmitting ? "Processing..." : `Buy ${tiles.length > 1 ? "Tiles" : "Tile"}`}
+          </Button>
+        ) : (
+          <Button variant="outlined">View History</Button>
+        )}
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>

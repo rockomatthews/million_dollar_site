@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Box, Button, Paper, Typography } from "@mui/material";
+import { Alert, Box, Button, CircularProgress, Paper, Snackbar, Typography } from "@mui/material";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { GRID_COLUMNS, GRID_ROWS, TILE_COUNT, TILE_PRICE_USD } from "@/lib/config/grid";
 import type { Tile } from "@/lib/types/tile";
 import { QuadrantNavigator, type Quadrant } from "@/components/board/QuadrantNavigator";
 import { TileModal } from "@/components/tile/TileModal";
 import { WalletConnectButton } from "@/components/wallet/WalletConnectButton";
+import { useAccount } from "wagmi";
 
 const STATUS_COLORS: Record<Tile["status"], string> = {
   available: "#1f2a44",
@@ -29,18 +31,86 @@ function generateInitialTiles(): Tile[] {
 }
 
 export function TileBoard() {
-  const [tiles] = useState<Tile[]>(() => generateInitialTiles());
   const [selectedTileIds, setSelectedTileIds] = useState<Set<number>>(new Set());
   const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [activeQuadrant, setActiveQuadrant] = useState<Quadrant | null>(null);
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
 
+  const queryClient = useQueryClient();
+  const { address, isConnected } = useAccount();
   const boardSize = useMemo(() => 700, []);
+  const { data: tilesResponse, isLoading } = useQuery<{ tiles: Tile[] }>({
+    queryKey: ["tiles"],
+    queryFn: async () => {
+      const response = await fetch("/api/tiles");
+      if (!response.ok) {
+        throw new Error("Failed to fetch tiles.");
+      }
+      return (await response.json()) as { tiles: Tile[] };
+    },
+  });
+  const fallbackTiles = useMemo(() => generateInitialTiles(), []);
+  const tiles = tilesResponse?.tiles ?? fallbackTiles;
+
   const selectedTiles = useMemo(
     () => tiles.filter((tile) => selectedTileIds.has(tile.id)),
     [tiles, selectedTileIds],
   );
+
+  const reserveMutation = useMutation({
+    mutationFn: async () => {
+      if (!address || selectedTiles.length === 0) {
+        throw new Error("Connect a wallet and select at least one tile.");
+      }
+
+      const response = await fetch("/api/tiles/reserve", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tileIds: selectedTiles.map((tile) => tile.id),
+          walletAddress: address,
+        }),
+      });
+
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to reserve selected tiles.");
+      }
+
+      const checkoutResponse = await fetch("/api/checkout-intents", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tileIds: selectedTiles.map((tile) => tile.id),
+          walletAddress: address,
+        }),
+      });
+
+      const checkoutPayload = (await checkoutResponse.json()) as {
+        error?: string;
+        checkoutIntent?: { id: string; amountUsd: number };
+      };
+      if (!checkoutResponse.ok || !checkoutPayload.checkoutIntent) {
+        throw new Error(checkoutPayload.error ?? "Reservation succeeded, but checkout intent failed.");
+      }
+      return checkoutPayload.checkoutIntent;
+    },
+    onSuccess: (checkoutIntent) => {
+      setNotice(`Tiles reserved. Checkout intent ${checkoutIntent.id.slice(0, 8)}... created for $${checkoutIntent.amountUsd}.`);
+      setIsBuyModalOpen(false);
+      setSelectedTileIds(new Set());
+      void queryClient.invalidateQueries({ queryKey: ["tiles"] });
+    },
+    onError: (error) => {
+      setNotice(error instanceof Error ? error.message : "Reservation failed.");
+    },
+  });
 
   const handleQuadrantSelect = (quadrant: Quadrant) => {
     setActiveQuadrant(quadrant);
@@ -78,6 +148,14 @@ export function TileBoard() {
     });
   };
 
+  const handleBuySelected = () => {
+    if (!isConnected) {
+      setNotice("Connect your wallet before buying tiles.");
+      return;
+    }
+    setIsBuyModalOpen(true);
+  };
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -106,7 +184,12 @@ export function TileBoard() {
           <Button size="small" variant="outlined" disabled={selectedTiles.length === 0} onClick={() => setSelectedTileIds(new Set())}>
             Clear
           </Button>
-          <Button size="small" variant="contained" disabled={selectedTiles.length === 0} onClick={() => setIsBuyModalOpen(true)}>
+          <Button
+            size="small"
+            variant="contained"
+            disabled={selectedTiles.length === 0 || !isConnected}
+            onClick={handleBuySelected}
+          >
             Buy Selected
           </Button>
         </Box>
@@ -126,7 +209,12 @@ export function TileBoard() {
           borderColor: "divider",
         }}
       >
-        <Box
+        {isLoading ? (
+          <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%" }}>
+            <CircularProgress />
+          </Box>
+        ) : (
+          <Box
           sx={{
             width: boardSize,
             height: boardSize,
@@ -140,34 +228,46 @@ export function TileBoard() {
             backgroundColor: "#0f172a",
             p: "1px",
           }}
-        >
-          {tiles.map((tile) => (
-            <Box
-              key={tile.id}
-              role="button"
-              tabIndex={0}
-              aria-label={`Tile ${tile.id}`}
-              onClick={() => toggleTileSelection(tile)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  toggleTileSelection(tile);
-                }
-              }}
-              sx={{
-                backgroundColor: STATUS_COLORS[tile.status],
-                cursor: "pointer",
-                outline: selectedTileIds.has(tile.id) ? "1px solid #00d4ff" : "none",
-                "&:hover": {
-                  outline: "1px solid #00d4ff",
-                  zIndex: 1,
-                },
-              }}
-            />
-          ))}
-        </Box>
+          >
+            {tiles.map((tile) => (
+              <Box
+                key={tile.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Tile ${tile.id}`}
+                onClick={() => toggleTileSelection(tile)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    toggleTileSelection(tile);
+                  }
+                }}
+                sx={{
+                  backgroundColor: STATUS_COLORS[tile.status],
+                  cursor: "pointer",
+                  outline: selectedTileIds.has(tile.id) ? "1px solid #00d4ff" : "none",
+                  "&:hover": {
+                    outline: "1px solid #00d4ff",
+                    zIndex: 1,
+                  },
+                }}
+              />
+            ))}
+          </Box>
+        )}
       </Paper>
 
-      <TileModal tiles={selectedTiles} open={isBuyModalOpen} onClose={() => setIsBuyModalOpen(false)} />
+      <TileModal
+        tiles={selectedTiles}
+        open={isBuyModalOpen}
+        isSubmitting={reserveMutation.isPending}
+        onConfirmPurchase={() => reserveMutation.mutate()}
+        onClose={() => setIsBuyModalOpen(false)}
+      />
+      <Snackbar open={Boolean(notice)} autoHideDuration={3500} onClose={() => setNotice(null)}>
+        <Alert severity="info" variant="filled" onClose={() => setNotice(null)}>
+          {notice}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }
