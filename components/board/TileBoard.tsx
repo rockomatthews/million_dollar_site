@@ -99,10 +99,28 @@ export function TileBoard() {
       if (!checkoutResponse.ok || !checkoutPayload.checkoutIntent) {
         throw new Error(checkoutPayload.error ?? "Reservation succeeded, but checkout intent failed.");
       }
-      return checkoutPayload.checkoutIntent;
+
+      const payResponse = await fetch(`/api/checkout-intents/${checkoutPayload.checkoutIntent.id}/pay`, {
+        method: "POST",
+      });
+      const payPayload = (await payResponse.json()) as {
+        error?: string;
+        checkoutUrl?: string;
+      };
+      if (!payResponse.ok || !payPayload.checkoutUrl) {
+        throw new Error(payPayload.error ?? "Checkout intent created, but payment session failed.");
+      }
+
+      return {
+        ...checkoutPayload.checkoutIntent,
+        checkoutUrl: payPayload.checkoutUrl,
+      };
     },
     onSuccess: (checkoutIntent) => {
-      setNotice(`Tiles reserved. Checkout intent ${checkoutIntent.id.slice(0, 8)}... created for $${checkoutIntent.amountUsd}.`);
+      setNotice(
+        `Tiles reserved. Checkout intent ${checkoutIntent.id.slice(0, 8)}... created for $${checkoutIntent.amountUsd}.`,
+      );
+      window.open(checkoutIntent.checkoutUrl, "_blank", "noopener,noreferrer");
       setIsBuyModalOpen(false);
       setSelectedTileIds(new Set());
       void queryClient.invalidateQueries({ queryKey: ["tiles"] });
