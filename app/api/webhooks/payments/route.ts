@@ -1,49 +1,59 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/server/db/supabaseAdmin";
+import { verifyNowPaymentsSignature } from "@/server/payments/nowpayments";
 
 interface PaymentWebhookBody {
-  checkoutIntentId: string;
-  status: "paid" | "failed" | "cancelled";
-  amountUsdc?: number;
-  providerReference?: string;
+  payment_id?: number | string;
+  order_id?: string;
+  payment_status?: string;
+  actually_paid?: number;
+  pay_amount?: number;
+  purchase_id?: number | string;
 }
 
 export async function POST(request: Request) {
   try {
-    const expectedSecret = process.env.PAYMENT_WEBHOOK_SECRET;
-    const receivedSecret = request.headers.get("x-payment-webhook-secret");
+    const ipnSecret = process.env.PAYMENT_WEBHOOK_SECRET;
+    const signature = request.headers.get("x-nowpayments-sig") ?? "";
+    const rawBody = await request.text();
 
-    if (!expectedSecret || receivedSecret !== expectedSecret) {
+    if (!ipnSecret || !verifyNowPaymentsSignature(rawBody, signature, ipnSecret)) {
       return NextResponse.json({ error: "Unauthorized webhook request." }, { status: 401 });
     }
 
-    const body = (await request.json()) as PaymentWebhookBody;
-    if (!body.checkoutIntentId || !body.status) {
-      return NextResponse.json({ error: "checkoutIntentId and status are required." }, { status: 400 });
+    const body = JSON.parse(rawBody) as PaymentWebhookBody;
+    const checkoutIntentId = body.order_id;
+    const paymentStatus = body.payment_status?.toLowerCase();
+
+    if (!checkoutIntentId || !paymentStatus) {
+      return NextResponse.json({ error: "order_id and payment_status are required." }, { status: 400 });
     }
 
     const supabase = getSupabaseAdminClient();
     const { data: intent, error: intentError } = await supabase
       .from("checkout_intents")
       .select("id,status,tile_ids")
-      .eq("id", body.checkoutIntentId)
+      .eq("id", checkoutIntentId)
       .single();
 
     if (intentError || !intent) {
       return NextResponse.json({ error: "Checkout intent not found." }, { status: 404 });
     }
 
-    if (intent.status === "paid" && body.status === "paid") {
+    const isPaidStatus = ["finished", "confirmed", "sending"].includes(paymentStatus);
+    const isCancelledStatus = ["failed", "expired", "refunded", "cancelled"].includes(paymentStatus);
+
+    if (intent.status === "paid" && isPaidStatus) {
       return NextResponse.json({ ok: true, idempotent: true });
     }
 
-    const nextIntentStatus = body.status === "paid" ? "paid" : body.status === "cancelled" ? "cancelled" : "expired";
+    const nextIntentStatus = isPaidStatus ? "paid" : isCancelledStatus ? "cancelled" : "pending";
     const { error: updateIntentError } = await supabase
       .from("checkout_intents")
       .update({
         status: nextIntentStatus,
-        amount_usdc: body.amountUsdc ?? null,
-        provider_reference: body.providerReference ?? null,
+        amount_usdc: body.actually_paid ?? body.pay_amount ?? null,
+        provider_reference: (body.payment_id ?? body.purchase_id ?? null)?.toString() ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", intent.id);
@@ -54,7 +64,7 @@ export async function POST(request: Request) {
 
     const tileIds = intent.tile_ids as number[];
 
-    if (body.status === "paid") {
+    if (isPaidStatus) {
       const { error: soldError } = await supabase
         .from("tiles")
         .update({
@@ -68,7 +78,7 @@ export async function POST(request: Request) {
       if (soldError) {
         return NextResponse.json({ error: "Checkout marked paid but tile state update failed." }, { status: 500 });
       }
-    } else {
+    } else if (isCancelledStatus) {
       const { error: releaseError } = await supabase
         .from("tiles")
         .update({
@@ -86,7 +96,7 @@ export async function POST(request: Request) {
       }
     }
 
-    return NextResponse.json({ ok: true, status: nextIntentStatus });
+    return NextResponse.json({ ok: true, status: nextIntentStatus, providerStatus: paymentStatus });
   } catch {
     return NextResponse.json({ error: "Invalid webhook payload." }, { status: 400 });
   }
