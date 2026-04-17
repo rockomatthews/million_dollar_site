@@ -11,64 +11,77 @@ import {
   Link,
   Typography,
 } from "@mui/material";
-import { TILE_PRICE_USD } from "@/lib/config/grid";
+import { TILE_PRICE_USD, TILE_SIZE_PX } from "@/lib/config/grid";
 import type { Tile } from "@/lib/types/tile";
 
 interface TileModalProps {
-  tile: Tile | null;
+  tiles: Tile[];
   open: boolean;
   onClose: () => void;
 }
 
-export function TileModal({ tile, open, onClose }: TileModalProps) {
-  if (!tile) {
+export function TileModal({ tiles, open, onClose }: TileModalProps) {
+  if (tiles.length === 0) {
     return null;
   }
 
-  const isAvailable = tile.status === "available";
+  const isBulk = tiles.length > 1;
+  const firstTile = tiles[0];
+  const isAvailable = tiles.every((tile) => tile.status === "available");
+  const totalPrice = tiles.length * TILE_PRICE_USD;
+  const xValues = tiles.map((tile) => tile.x);
+  const yValues = tiles.map((tile) => tile.y);
+  const minX = Math.min(...xValues);
+  const maxX = Math.max(...xValues);
+  const minY = Math.min(...yValues);
+  const maxY = Math.max(...yValues);
+  const widthPx = (maxX - minX + 1) * TILE_SIZE_PX;
+  const heightPx = (maxY - minY + 1) * TILE_SIZE_PX;
 
   return (
     <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
-      <DialogTitle>
-        Tile #{tile.id} ({tile.x},{tile.y})
-      </DialogTitle>
+      <DialogTitle>{isBulk ? `Buy ${tiles.length} Tiles` : `Tile #${firstTile.id} (${firstTile.x},${firstTile.y})`}</DialogTitle>
       <DialogContent dividers>
         <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
           <Box sx={{ display: "flex", gap: 1, alignItems: "center" }}>
-            <Chip label={tile.status.toUpperCase()} color={isAvailable ? "success" : "warning"} />
+            <Chip label={isAvailable ? "AVAILABLE" : "MIXED STATUS"} color={isAvailable ? "success" : "warning"} />
             <Typography variant="body2" color="text.secondary">
-              Primary Price: ${TILE_PRICE_USD}
+              Total Price: ${totalPrice}
             </Typography>
           </Box>
 
-          {tile.ownerWallet ? (
-            <Typography variant="body2">Owner: {tile.ownerWallet}</Typography>
+          {isBulk ? (
+            <Typography variant="body2" color="text.secondary">
+              Selection footprint: {widthPx}px x {heightPx}px (from {tiles.length} individual 10x10 tiles)
+            </Typography>
+          ) : firstTile.ownerWallet ? (
+            <Typography variant="body2">Owner: {firstTile.ownerWallet}</Typography>
           ) : (
             <Typography variant="body2" color="text.secondary">
               No owner yet
             </Typography>
           )}
 
-          {tile.title ? (
+          {!isBulk && firstTile.title ? (
             <Box>
-              <Typography variant="h6">{tile.title}</Typography>
-              {tile.description ? (
+              <Typography variant="h6">{firstTile.title}</Typography>
+              {firstTile.description ? (
                 <Typography variant="body2" color="text.secondary">
-                  {tile.description}
+                  {firstTile.description}
                 </Typography>
               ) : null}
             </Box>
           ) : null}
 
-          {tile.outboundUrl ? (
-            <Link href={tile.outboundUrl} target="_blank" rel="noopener noreferrer">
+          {!isBulk && firstTile.outboundUrl ? (
+            <Link href={firstTile.outboundUrl} target="_blank" rel="noopener noreferrer">
               Visit linked site
             </Link>
           ) : null}
         </Box>
       </DialogContent>
       <DialogActions>
-        {isAvailable ? <Button variant="contained">Buy Tile</Button> : <Button variant="outlined">View History</Button>}
+        {isAvailable ? <Button variant="contained">Buy {tiles.length > 1 ? "Tiles" : "Tile"}</Button> : <Button variant="outlined">View History</Button>}
         <Button onClick={onClose}>Close</Button>
       </DialogActions>
     </Dialog>

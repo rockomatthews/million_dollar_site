@@ -3,6 +3,8 @@
 import { CssBaseline, ThemeProvider, createTheme } from "@mui/material";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
+import { WagmiProvider } from "wagmi";
+import { wagmiConfig } from "@/lib/wallet/wagmiConfig";
 
 const appTheme = createTheme({
   palette: {
@@ -30,11 +32,13 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
 
   return (
-    <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={appTheme}>
-        <CssBaseline />
-        {children}
-      </ThemeProvider>
-    </QueryClientProvider>
+    <WagmiProvider config={wagmiConfig}>
+      <QueryClientProvider client={queryClient}>
+        <ThemeProvider theme={appTheme}>
+          <CssBaseline />
+          {children}
+        </ThemeProvider>
+      </QueryClientProvider>
+    </WagmiProvider>
   );
 }

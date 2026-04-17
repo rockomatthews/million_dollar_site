@@ -1,11 +1,12 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Box, Paper, Slider, Typography } from "@mui/material";
-import { GRID_COLUMNS, GRID_ROWS, TILE_COUNT } from "@/lib/config/grid";
+import { Box, Button, Paper, Typography } from "@mui/material";
+import { GRID_COLUMNS, GRID_ROWS, TILE_COUNT, TILE_PRICE_USD } from "@/lib/config/grid";
 import type { Tile } from "@/lib/types/tile";
 import { QuadrantNavigator, type Quadrant } from "@/components/board/QuadrantNavigator";
 import { TileModal } from "@/components/tile/TileModal";
+import { WalletConnectButton } from "@/components/wallet/WalletConnectButton";
 
 const STATUS_COLORS: Record<Tile["status"], string> = {
   available: "#1f2a44",
@@ -29,12 +30,17 @@ function generateInitialTiles(): Tile[] {
 
 export function TileBoard() {
   const [tiles] = useState<Tile[]>(() => generateInitialTiles());
-  const [selectedTile, setSelectedTile] = useState<Tile | null>(null);
+  const [selectedTileIds, setSelectedTileIds] = useState<Set<number>>(new Set());
+  const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [activeQuadrant, setActiveQuadrant] = useState<Quadrant | null>(null);
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
 
   const boardSize = useMemo(() => 700, []);
+  const selectedTiles = useMemo(
+    () => tiles.filter((tile) => selectedTileIds.has(tile.id)),
+    [tiles, selectedTileIds],
+  );
 
   const handleQuadrantSelect = (quadrant: Quadrant) => {
     setActiveQuadrant(quadrant);
@@ -56,18 +62,54 @@ export function TileBoard() {
     setTranslate({ x: 0, y: 0 });
   };
 
+  const toggleTileSelection = (tile: Tile) => {
+    if (tile.status !== "available") {
+      return;
+    }
+
+    setSelectedTileIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(tile.id)) {
+        next.delete(tile.id);
+      } else {
+        next.add(tile.id);
+      }
+      return next;
+    });
+  };
+
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
-      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <Typography variant="h6">1000x1000 Grid (10,000 tiles)</Typography>
-        <QuadrantNavigator activeQuadrant={activeQuadrant} onSelectQuadrant={handleQuadrantSelect} onReset={resetView} />
+      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <Box>
+          <Typography variant="h4" sx={{ fontWeight: 700 }}>
+            Million Dollar Crypto Grid
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Select one or more 10x10 tiles to build larger ad areas.
+          </Typography>
+        </Box>
+        <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
+          <WalletConnectButton />
+          <QuadrantNavigator activeQuadrant={activeQuadrant} onSelectQuadrant={handleQuadrantSelect} onReset={resetView} />
+        </Box>
       </Box>
 
-      <Box sx={{ display: "flex", gap: 2, alignItems: "center" }}>
+      <Box sx={{ display: "flex", gap: 2, alignItems: "center", justifyContent: "space-between" }}>
         <Typography variant="body2" color="text.secondary">
-          Zoom
+          1000x1000 Grid (10,000 total tiles)
         </Typography>
-        <Slider min={1} max={6} step={0.5} value={zoom} onChange={(_, value) => setZoom(value as number)} sx={{ width: 220 }} />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+          <Typography variant="body2" color="text.secondary">
+            Selected: {selectedTiles.length} (${selectedTiles.length * TILE_PRICE_USD})
+          </Typography>
+          <Button size="small" variant="outlined" disabled={selectedTiles.length === 0} onClick={() => setSelectedTileIds(new Set())}>
+            Clear
+          </Button>
+          <Button size="small" variant="contained" disabled={selectedTiles.length === 0} onClick={() => setIsBuyModalOpen(true)}>
+            Buy Selected
+          </Button>
+        </Box>
       </Box>
 
       <Paper
@@ -105,15 +147,16 @@ export function TileBoard() {
               role="button"
               tabIndex={0}
               aria-label={`Tile ${tile.id}`}
-              onClick={() => setSelectedTile(tile)}
+              onClick={() => toggleTileSelection(tile)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") {
-                  setSelectedTile(tile);
+                  toggleTileSelection(tile);
                 }
               }}
               sx={{
                 backgroundColor: STATUS_COLORS[tile.status],
                 cursor: "pointer",
+                outline: selectedTileIds.has(tile.id) ? "1px solid #00d4ff" : "none",
                 "&:hover": {
                   outline: "1px solid #00d4ff",
                   zIndex: 1,
@@ -124,7 +167,7 @@ export function TileBoard() {
         </Box>
       </Paper>
 
-      <TileModal tile={selectedTile} open={Boolean(selectedTile)} onClose={() => setSelectedTile(null)} />
+      <TileModal tiles={selectedTiles} open={isBuyModalOpen} onClose={() => setIsBuyModalOpen(false)} />
     </Box>
   );
 }
