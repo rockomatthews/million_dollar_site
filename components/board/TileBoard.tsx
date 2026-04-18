@@ -6,7 +6,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CANVAS_HEIGHT_PX,
   CANVAS_WIDTH_PX,
+  GRID_COL_TRACK_PX,
   GRID_COLUMNS,
+  GRID_ROW_TRACK_PX,
   GRID_ROWS,
   TILE_COUNT,
   TILE_PRICE_USD,
@@ -219,8 +221,7 @@ export function TileBoard() {
             Million Dollar Crypto Grid
           </Typography>
           <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.85)" }}>
-            {CANVAS_WIDTH_PX}×{CANVAS_HEIGHT_PX.toFixed(2)}px canvas (1,000,000 pixels) · 10×10 tiles · {TILE_COUNT.toLocaleString()}{" "}
-            cells
+            {CANVAS_WIDTH_PX}×{CANVAS_HEIGHT_PX}px canvas (1,000,000 pixels) · 10×10px tiles · {TILE_COUNT.toLocaleString()} tiles
           </Typography>
         </Box>
         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
@@ -256,15 +257,13 @@ export function TileBoard() {
         sx={{
           width: "100%",
           maxHeight: "calc(100vh - 200px)",
-          minHeight: 320,
+          minHeight: 0,
           overflow: "auto",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
           border: "1px solid",
           borderColor: "rgba(0,0,0,0.2)",
           bgcolor: "#bdbdbd",
           p: 2,
+          display: "block",
         }}
       >
         {isLoading ? (
@@ -285,44 +284,53 @@ export function TileBoard() {
         ) : (
           <Box
             sx={{
-              width: boardMetrics.width,
-              height: boardMetrics.height,
-              flexShrink: 0,
-              transform: `scale(${zoom}) translate(${translate.x}px, ${translate.y}px)`,
-              transformOrigin: "center center",
-              transition: "transform 200ms ease",
-              display: "grid",
-              gridTemplateColumns: `repeat(${GRID_COLUMNS}, 1fr)`,
-              gridTemplateRows: `repeat(${GRID_ROWS}, 1fr)`,
-              gap: "1px",
-              backgroundColor: "#616161",
-              p: "1px",
-              boxSizing: "border-box",
+              width: "fit-content",
+              maxWidth: "100%",
+              mx: "auto",
             }}
           >
-            {tiles.map((tile) => (
-              <Box
-                key={tile.id}
-                role="button"
-                tabIndex={0}
-                aria-label={`Tile ${tile.id}`}
-                onClick={() => handleTileActivate(tile)}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    handleTileActivate(tile);
-                  }
-                }}
-                sx={{
-                  backgroundColor: STATUS_COLORS[tile.status],
-                  cursor: "pointer",
-                  outline: selectedTileIds.has(tile.id) ? "2px solid #1565c0" : "none",
-                  "&:hover": {
-                    outline: "2px solid #1565c0",
-                    zIndex: 1,
-                  },
-                }}
-              />
-            ))}
+            <Box
+              sx={{
+                width: boardMetrics.width,
+                height: boardMetrics.height,
+                transform: `scale(${zoom}) translate(${translate.x}px, ${translate.y}px)`,
+                transformOrigin: "top center",
+                transition: "transform 200ms ease",
+                display: "grid",
+                gridTemplateColumns: `repeat(${GRID_COLUMNS}, ${GRID_COL_TRACK_PX}px)`,
+                gridTemplateRows: `repeat(${GRID_ROWS}, ${GRID_ROW_TRACK_PX}px)`,
+                gap: "1px",
+                backgroundColor: "#616161",
+                p: "1px",
+                boxSizing: "border-box",
+              }}
+            >
+              {tiles.map((tile) => (
+                <Box
+                  key={tile.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Tile ${tile.id}`}
+                  onClick={() => handleTileActivate(tile)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      handleTileActivate(tile);
+                    }
+                  }}
+                  sx={{
+                    minWidth: 0,
+                    minHeight: 0,
+                    backgroundColor: STATUS_COLORS[tile.status],
+                    cursor: "pointer",
+                    outline: selectedTileIds.has(tile.id) ? "2px solid #1565c0" : "none",
+                    "&:hover": {
+                      outline: "2px solid #1565c0",
+                      zIndex: 1,
+                    },
+                  }}
+                />
+              ))}
+            </Box>
           </Box>
         )}
       </Paper>
