@@ -16,7 +16,7 @@ export async function GET(_: Request, { params }: TileRouteParams) {
     const supabase = getSupabaseAdminClient();
     const { data: tile, error: tileError } = await supabase
       .from("tiles")
-      .select("id,x,y,status,current_owner_wallet,current_listing_price_usd")
+      .select("id,x,y,status,current_owner_wallet,current_listing_price_usd,last_checkout_intent_id,reservation_expires_at")
       .eq("id", tileId)
       .single();
 
@@ -40,6 +40,8 @@ export async function GET(_: Request, { params }: TileRouteParams) {
         status: tile.status,
         ownerWallet: tile.current_owner_wallet ?? undefined,
         listingPriceUsd: tile.current_listing_price_usd ?? undefined,
+        lastCheckoutIntentId: tile.last_checkout_intent_id ?? undefined,
+        reservationExpiresAt: tile.reservation_expires_at ?? undefined,
       },
       creative: creative
         ? {

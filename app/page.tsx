@@ -1,4 +1,5 @@
 import { Box, Container } from "@mui/material";
+import { Suspense } from "react";
 import { TileBoard } from "@/components/board/TileBoard";
 
 export default function HomePage() {
@@ -13,7 +14,9 @@ export default function HomePage() {
       }}
     >
       <Box sx={{ height: "100%" }}>
-        <TileBoard />
+        <Suspense fallback={null}>
+          <TileBoard />
+        </Suspense>
       </Box>
     </Container>
   );

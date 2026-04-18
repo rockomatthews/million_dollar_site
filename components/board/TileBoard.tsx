@@ -16,6 +16,8 @@ import {
 } from "@/lib/config/grid";
 import type { Tile } from "@/lib/types/tile";
 import { QuadrantNavigator, type Quadrant } from "@/components/board/QuadrantNavigator";
+import { CheckoutIntentBanner } from "@/components/checkout/CheckoutIntentBanner";
+import { ReservedTileModal } from "@/components/checkout/ReservedTileModal";
 import { TileModal } from "@/components/tile/TileModal";
 import { TileOwnerModal } from "@/components/tile/TileOwnerModal";
 import { WalletConnectButton } from "@/components/wallet/WalletConnectButton";
@@ -37,6 +39,7 @@ export function TileBoard() {
   const [selectedTileIds, setSelectedTileIds] = useState<Set<number>>(new Set());
   const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
   const [ownerTileId, setOwnerTileId] = useState<number | null>(null);
+  const [reservedTileId, setReservedTileId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [activeQuadrant, setActiveQuadrant] = useState<Quadrant | null>(null);
@@ -253,7 +256,7 @@ export function TileBoard() {
     }
 
     if (tile.status === "reserved") {
-      setNotice("This tile is reserved for an active checkout.");
+      setReservedTileId(tile.id);
     }
   };
 
@@ -311,6 +314,8 @@ export function TileBoard() {
           <QuadrantNavigator activeQuadrant={activeQuadrant} onSelectQuadrant={handleQuadrantSelect} onReset={resetView} />
         </Box>
       </Box>
+
+      <CheckoutIntentBanner />
 
       <Box sx={{ display: "flex", gap: 2, alignItems: "center", justifyContent: "space-between" }}>
         <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.85)" }}>
@@ -452,6 +457,12 @@ export function TileBoard() {
         walletAddress={address}
         open={Boolean(ownerTileId)}
         onClose={() => setOwnerTileId(null)}
+      />
+      <ReservedTileModal
+        tileId={reservedTileId}
+        walletAddress={address}
+        open={Boolean(reservedTileId)}
+        onClose={() => setReservedTileId(null)}
       />
       <Snackbar open={Boolean(notice)} autoHideDuration={3500} onClose={() => setNotice(null)}>
         <Alert severity="info" variant="filled" onClose={() => setNotice(null)}>
