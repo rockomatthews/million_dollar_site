@@ -61,8 +61,31 @@ export function TileBoard() {
       return (await response.json()) as { tiles: Tile[]; source?: string; message?: string };
     },
   });
-  const tiles = useMemo(() => tilesResponse?.tiles ?? [], [tilesResponse?.tiles]);
-  const needsSeed = Boolean(tilesResponse?.source === "empty" || (!isLoading && tiles.length === 0));
+  const apiTiles = useMemo(() => tilesResponse?.tiles ?? [], [tilesResponse?.tiles]);
+
+  /**
+   * DB may have fewer than TILE_COUNT rows (e.g. old 1,000-tile seed). The CSS grid still has 10,000 cells;
+   * if we only render one Box per API row, only the first N cells get children and the rest show bare
+   * grid background (solid grey). Always render TILE_COUNT cells, filling missing ids as display-only available.
+   */
+  const displayTiles = useMemo(() => {
+    if (apiTiles.length === 0) return [];
+    const byId = new Map(apiTiles.map((t) => [t.id, t]));
+    return Array.from({ length: TILE_COUNT }, (_, index) => {
+      const id = index + 1;
+      const found = byId.get(id);
+      if (found) return found;
+      const x = index % GRID_COLUMNS;
+      const y = Math.floor(index / GRID_COLUMNS);
+      return { id, x, y, status: "available" as const };
+    });
+  }, [apiTiles]);
+
+  const needsSeed = Boolean(tilesResponse?.source === "empty" || (!isLoading && apiTiles.length === 0));
+  const incompleteDb =
+    !isLoading && apiTiles.length > 0 && apiTiles.length < TILE_COUNT && tilesResponse?.source === "supabase";
+
+  const tiles = displayTiles;
 
   const seedMutation = useMutation({
     mutationFn: async () => {
@@ -83,8 +106,8 @@ export function TileBoard() {
   });
 
   const selectedTiles = useMemo(
-    () => tiles.filter((tile) => selectedTileIds.has(tile.id)),
-    [tiles, selectedTileIds],
+    () => displayTiles.filter((tile) => selectedTileIds.has(tile.id)),
+    [displayTiles, selectedTileIds],
   );
 
   const reserveMutation = useMutation({
@@ -281,6 +304,17 @@ export function TileBoard() {
           </Button>
         </Box>
       </Box>
+
+      {incompleteDb ? (
+        <Alert severity="warning" sx={{ bgcolor: "rgba(255,255,255,0.12)", color: "#fff" }}>
+          Database has {apiTiles.length.toLocaleString()} / {TILE_COUNT.toLocaleString()} tile rows (e.g. old seed). The
+          grid is drawn in full, but purchases need all rows. In Supabase:{" "}
+          <Box component="code" sx={{ color: "#ffecb3" }}>
+            TRUNCATE public.tile_creatives, public.tiles RESTART IDENTITY CASCADE;
+          </Box>{" "}
+          then use Initialize here.
+        </Alert>
+      ) : null}
 
       <Paper
         elevation={2}
