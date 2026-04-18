@@ -24,7 +24,7 @@ export function QuadrantNavigator({
 }: QuadrantNavigatorProps) {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 1 }}>
-      <Typography variant="subtitle2" color="text.secondary">
+      <Typography variant="subtitle2" sx={{ color: "rgba(255,255,255,0.85)" }}>
         Quadrant Zoom
       </Typography>
       <ButtonGroup variant="outlined" size="small" color="primary">

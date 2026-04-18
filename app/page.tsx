@@ -9,6 +9,7 @@ export default function HomePage() {
         height: "100vh",
         overflow: "hidden",
         py: 2,
+        bgcolor: "transparent",
       }}
     >
       <Box sx={{ height: "100%" }}>

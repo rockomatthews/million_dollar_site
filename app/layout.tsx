@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "Million Dollar Crypto Grid",
-  description: "A modern 1000x1000 ad grid marketplace powered by crypto.",
+  description: "A one-million-pixel ad grid (1400px wide) marketplace powered by crypto.",
 };
 
 export default function RootLayout({

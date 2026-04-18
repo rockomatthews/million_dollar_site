@@ -3,36 +3,32 @@
 import { useMemo, useState } from "react";
 import { Alert, Box, Button, CircularProgress, Paper, Snackbar, Typography } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { GRID_COLUMNS, GRID_ROWS, TILE_COUNT, TILE_PRICE_USD } from "@/lib/config/grid";
+import {
+  CANVAS_HEIGHT_PX,
+  CANVAS_WIDTH_PX,
+  GRID_COLUMNS,
+  GRID_ROWS,
+  TILE_COUNT,
+  TILE_PRICE_USD,
+} from "@/lib/config/grid";
 import type { Tile } from "@/lib/types/tile";
 import { QuadrantNavigator, type Quadrant } from "@/components/board/QuadrantNavigator";
 import { TileModal } from "@/components/tile/TileModal";
+import { TileOwnerModal } from "@/components/tile/TileOwnerModal";
 import { WalletConnectButton } from "@/components/wallet/WalletConnectButton";
 import { useAccount } from "wagmi";
 
 const STATUS_COLORS: Record<Tile["status"], string> = {
-  available: "#1f2a44",
-  reserved: "#5b3a00",
-  sold: "#123524",
-  listed: "#36215b",
+  available: "#9e9e9e",
+  reserved: "#a1887f",
+  sold: "#78909c",
+  listed: "#9575cd",
 };
-
-function generateInitialTiles(): Tile[] {
-  return Array.from({ length: TILE_COUNT }, (_, index) => {
-    const x = index % GRID_COLUMNS;
-    const y = Math.floor(index / GRID_COLUMNS);
-    return {
-      id: index + 1,
-      x,
-      y,
-      status: "available",
-    };
-  });
-}
 
 export function TileBoard() {
   const [selectedTileIds, setSelectedTileIds] = useState<Set<number>>(new Set());
   const [isBuyModalOpen, setIsBuyModalOpen] = useState(false);
+  const [ownerTileId, setOwnerTileId] = useState<number | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [zoom, setZoom] = useState(1);
   const [activeQuadrant, setActiveQuadrant] = useState<Quadrant | null>(null);
@@ -40,19 +36,43 @@ export function TileBoard() {
 
   const queryClient = useQueryClient();
   const { address, isConnected } = useAccount();
-  const boardSize = useMemo(() => 700, []);
-  const { data: tilesResponse, isLoading } = useQuery<{ tiles: Tile[] }>({
+  const boardMetrics = useMemo(
+    () => ({
+      width: CANVAS_WIDTH_PX,
+      height: CANVAS_HEIGHT_PX,
+    }),
+    [],
+  );
+  const { data: tilesResponse, isLoading } = useQuery<{ tiles: Tile[]; source?: string; message?: string }>({
     queryKey: ["tiles"],
     queryFn: async () => {
       const response = await fetch("/api/tiles");
       if (!response.ok) {
         throw new Error("Failed to fetch tiles.");
       }
-      return (await response.json()) as { tiles: Tile[] };
+      return (await response.json()) as { tiles: Tile[]; source?: string; message?: string };
     },
   });
-  const fallbackTiles = useMemo(() => generateInitialTiles(), []);
-  const tiles = tilesResponse?.tiles ?? fallbackTiles;
+  const tiles = useMemo(() => tilesResponse?.tiles ?? [], [tilesResponse?.tiles]);
+  const needsSeed = Boolean(tilesResponse?.source === "empty" || (!isLoading && tiles.length === 0));
+
+  const seedMutation = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/tiles/seed", { method: "POST" });
+      const payload = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(payload.error ?? "Failed to seed tiles.");
+      }
+      return payload;
+    },
+    onSuccess: () => {
+      setNotice("Grid initialized. You can select tiles now.");
+      void queryClient.invalidateQueries({ queryKey: ["tiles"] });
+    },
+    onError: (error) => {
+      setNotice(error instanceof Error ? error.message : "Failed to initialize grid.");
+    },
+  });
 
   const selectedTiles = useMemo(
     () => tiles.filter((tile) => selectedTileIds.has(tile.id)),
@@ -134,12 +154,13 @@ export function TileBoard() {
     setActiveQuadrant(quadrant);
     setZoom(2);
 
-    const offset = boardSize / 4;
+    const offsetX = boardMetrics.width / 4;
+    const offsetY = boardMetrics.height / 4;
     const map: Record<Quadrant, { x: number; y: number }> = {
-      nw: { x: offset, y: offset },
-      ne: { x: -offset, y: offset },
-      sw: { x: offset, y: -offset },
-      se: { x: -offset, y: -offset },
+      nw: { x: offsetX, y: offsetY },
+      ne: { x: -offsetX, y: offsetY },
+      sw: { x: offsetX, y: -offsetY },
+      se: { x: -offsetX, y: -offsetY },
     };
     setTranslate(map[quadrant]);
   };
@@ -166,6 +187,22 @@ export function TileBoard() {
     });
   };
 
+  const handleTileActivate = (tile: Tile) => {
+    if (tile.status === "available") {
+      toggleTileSelection(tile);
+      return;
+    }
+
+    if (tile.status === "sold" || tile.status === "listed") {
+      setOwnerTileId(tile.id);
+      return;
+    }
+
+    if (tile.status === "reserved") {
+      setNotice("This tile is reserved for an active checkout.");
+    }
+  };
+
   const handleBuySelected = () => {
     if (!isConnected) {
       setNotice("Connect your wallet before buying tiles.");
@@ -178,11 +215,12 @@ export function TileBoard() {
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
+          <Typography variant="h4" sx={{ fontWeight: 700, color: "#fff" }}>
             Million Dollar Crypto Grid
           </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Select one or more 10x10 tiles to build larger ad areas.
+          <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.85)" }}>
+            {CANVAS_WIDTH_PX}×{CANVAS_HEIGHT_PX.toFixed(2)}px canvas (1,000,000 pixels) · 10×10 tiles · {TILE_COUNT.toLocaleString()}{" "}
+            cells
           </Typography>
         </Box>
         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
@@ -192,11 +230,11 @@ export function TileBoard() {
       </Box>
 
       <Box sx={{ display: "flex", gap: 2, alignItems: "center", justifyContent: "space-between" }}>
-        <Typography variant="body2" color="text.secondary">
-          1000x1000 Grid (10,000 total tiles)
+        <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.85)" }}>
+          Grid · {TILE_COUNT.toLocaleString()} tiles
         </Typography>
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-          <Typography variant="body2" color="text.secondary">
+          <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.85)" }}>
             Selected: {selectedTiles.length} (${selectedTiles.length * TILE_PRICE_USD})
           </Typography>
           <Button size="small" variant="outlined" disabled={selectedTiles.length === 0} onClick={() => setSelectedTileIds(new Set())}>
@@ -217,35 +255,50 @@ export function TileBoard() {
         elevation={2}
         sx={{
           width: "100%",
-          height: "calc(100vh - 240px)",
-          minHeight: 520,
-          overflow: "hidden",
+          maxHeight: "calc(100vh - 200px)",
+          minHeight: 320,
+          overflow: "auto",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           border: "1px solid",
-          borderColor: "divider",
+          borderColor: "rgba(0,0,0,0.2)",
+          bgcolor: "#bdbdbd",
+          p: 2,
         }}
       >
         {isLoading ? (
           <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100%" }}>
             <CircularProgress />
           </Box>
+        ) : needsSeed ? (
+          <Box sx={{ px: 2, maxWidth: 520 }}>
+            <Alert severity="warning">
+              The grid database is empty. Initialize it once to enable purchases ({tilesResponse?.message ?? "seed required"}).
+            </Alert>
+            <Box sx={{ mt: 2 }}>
+              <Button variant="contained" onClick={() => seedMutation.mutate()} disabled={seedMutation.isPending}>
+                {seedMutation.isPending ? "Initializing..." : `Initialize ${TILE_COUNT.toLocaleString()} Tiles`}
+              </Button>
+            </Box>
+          </Box>
         ) : (
           <Box
-          sx={{
-            width: boardSize,
-            height: boardSize,
-            transform: `scale(${zoom}) translate(${translate.x}px, ${translate.y}px)`,
-            transformOrigin: "center center",
-            transition: "transform 200ms ease",
-            display: "grid",
-            gridTemplateColumns: `repeat(${GRID_COLUMNS}, 1fr)`,
-            gridTemplateRows: `repeat(${GRID_ROWS}, 1fr)`,
-            gap: "1px",
-            backgroundColor: "#0f172a",
-            p: "1px",
-          }}
+            sx={{
+              width: boardMetrics.width,
+              height: boardMetrics.height,
+              flexShrink: 0,
+              transform: `scale(${zoom}) translate(${translate.x}px, ${translate.y}px)`,
+              transformOrigin: "center center",
+              transition: "transform 200ms ease",
+              display: "grid",
+              gridTemplateColumns: `repeat(${GRID_COLUMNS}, 1fr)`,
+              gridTemplateRows: `repeat(${GRID_ROWS}, 1fr)`,
+              gap: "1px",
+              backgroundColor: "#616161",
+              p: "1px",
+              boxSizing: "border-box",
+            }}
           >
             {tiles.map((tile) => (
               <Box
@@ -253,18 +306,18 @@ export function TileBoard() {
                 role="button"
                 tabIndex={0}
                 aria-label={`Tile ${tile.id}`}
-                onClick={() => toggleTileSelection(tile)}
+                onClick={() => handleTileActivate(tile)}
                 onKeyDown={(event) => {
                   if (event.key === "Enter" || event.key === " ") {
-                    toggleTileSelection(tile);
+                    handleTileActivate(tile);
                   }
                 }}
                 sx={{
                   backgroundColor: STATUS_COLORS[tile.status],
                   cursor: "pointer",
-                  outline: selectedTileIds.has(tile.id) ? "1px solid #00d4ff" : "none",
+                  outline: selectedTileIds.has(tile.id) ? "2px solid #1565c0" : "none",
                   "&:hover": {
-                    outline: "1px solid #00d4ff",
+                    outline: "2px solid #1565c0",
                     zIndex: 1,
                   },
                 }}
@@ -280,6 +333,12 @@ export function TileBoard() {
         isSubmitting={reserveMutation.isPending}
         onConfirmPurchase={() => reserveMutation.mutate()}
         onClose={() => setIsBuyModalOpen(false)}
+      />
+      <TileOwnerModal
+        tileId={ownerTileId}
+        walletAddress={address}
+        open={Boolean(ownerTileId)}
+        onClose={() => setOwnerTileId(null)}
       />
       <Snackbar open={Boolean(notice)} autoHideDuration={3500} onClose={() => setNotice(null)}>
         <Alert severity="info" variant="filled" onClose={() => setNotice(null)}>

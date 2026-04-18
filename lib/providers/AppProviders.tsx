@@ -16,8 +16,8 @@ const appTheme = createTheme({
       main: "#7c4dff",
     },
     background: {
-      default: "#0a0a0f",
-      paper: "#11131d",
+      default: "#2e7d32",
+      paper: "#9e9e9e",
     },
   },
   shape: {

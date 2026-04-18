@@ -1,20 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/server/db/supabaseAdmin";
-import { GRID_COLUMNS, TILE_COUNT } from "@/lib/config/grid";
+import { TILE_COUNT } from "@/lib/config/grid";
 import type { Tile } from "@/lib/types/tile";
-
-function generateFallbackTiles(): Tile[] {
-  return Array.from({ length: TILE_COUNT }, (_, index) => {
-    const x = index % GRID_COLUMNS;
-    const y = Math.floor(index / GRID_COLUMNS);
-    return {
-      id: index + 1,
-      x,
-      y,
-      status: "available",
-    };
-  });
-}
 
 export async function GET() {
   try {
@@ -30,7 +17,11 @@ export async function GET() {
     }
 
     if (!data || data.length === 0) {
-      return NextResponse.json({ tiles: generateFallbackTiles(), source: "fallback" });
+      return NextResponse.json({
+        tiles: [],
+        source: "empty",
+        message: "Tiles are not seeded yet. Run POST /api/tiles/seed once.",
+      });
     }
 
     const tiles: Tile[] = data.map((row) => ({

@@ -28,6 +28,17 @@ export async function POST() {
     }
 
     if ((count ?? 0) > 0) {
+      if (count !== TILE_COUNT) {
+        return NextResponse.json(
+          {
+            error:
+              "Tile count does not match current grid size. In Supabase SQL: TRUNCATE public.tiles RESTART IDENTITY CASCADE; then seed again.",
+            expectedTiles: TILE_COUNT,
+            actualTiles: count,
+          },
+          { status: 409 },
+        );
+      }
       return NextResponse.json({ ok: true, seeded: false, message: "Tiles already seeded." });
     }
 
