@@ -13,7 +13,7 @@ interface PaymentWebhookBody {
 
 export async function POST(request: Request) {
   try {
-    const ipnSecret = process.env.PAYMENT_WEBHOOK_SECRET;
+    const ipnSecret = process.env.PAYMENT_WEBHOOK_SECRET ?? process.env.NOWPAYMENTS_IPN_SECRET;
     const signature = request.headers.get("x-nowpayments-sig") ?? "";
     const rawBody = await request.text();
 

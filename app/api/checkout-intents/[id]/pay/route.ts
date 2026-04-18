@@ -36,12 +36,15 @@ export async function POST(_: Request, { params }: PayRouteParams) {
     const fallbackCheckoutUrl = `${appUrl}/?checkout_intent=${id}`;
 
     if (!paymentApiKey) {
+      // Do not return this URL as checkoutUrl — clients would open a new tab to the same resume page (useless loop).
       return NextResponse.json({
         ok: true,
         checkoutIntentId: intent.id,
-        checkoutUrl: fallbackCheckoutUrl,
+        checkoutUrl: null,
+        resumeUrl: fallbackCheckoutUrl,
         provider: "unconfigured",
-        message: "Set PAYMENT_API_KEY to enable NOWPayments checkout.",
+        message:
+          "NOWPayments is not configured. Add PAYMENT_API_KEY (and optionally PAYMENT_PROVIDER_BASE_URL) to the server environment, then use Open payment page again for a hosted invoice URL.",
       });
     }
 
