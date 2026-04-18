@@ -30,11 +30,24 @@ export async function POST(request: Request) {
       .in("id", uniqueTileIds);
 
     if (selectError) {
-      return NextResponse.json({ error: "Failed to verify tile availability." }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to verify tile availability.", details: selectError.message },
+        { status: 500 },
+      );
     }
 
     if (!selectedTiles || selectedTiles.length !== uniqueTileIds.length) {
-      return NextResponse.json({ error: "One or more selected tiles do not exist." }, { status: 400 });
+      const foundIds = new Set((selectedTiles ?? []).map((t) => Number(t.id)));
+      const missing = uniqueTileIds.filter((id) => !foundIds.has(id));
+      return NextResponse.json(
+        {
+          error:
+            "One or more selected tiles do not exist in the database. Truncate and seed all 10,000 tiles if your grid was partially seeded.",
+          missingTileIds: missing.slice(0, 20),
+          missingCount: missing.length,
+        },
+        { status: 400 },
+      );
     }
 
     const unavailable = selectedTiles.filter((tile) => tile.status !== "available").map((tile) => tile.id);
@@ -46,7 +59,7 @@ export async function POST(request: Request) {
     }
 
     const reservationExpiresAt = new Date(Date.now() + RESERVATION_MINUTES * 60 * 1000).toISOString();
-    const { error: updateError } = await supabase
+    const { data: updatedRows, error: updateError } = await supabase
       .from("tiles")
       .update({
         status: "reserved",
@@ -55,10 +68,33 @@ export async function POST(request: Request) {
         updated_at: new Date().toISOString(),
       })
       .in("id", uniqueTileIds)
-      .eq("status", "available");
+      .eq("status", "available")
+      .select("id");
 
     if (updateError) {
-      return NextResponse.json({ error: "Failed to reserve selected tiles." }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: "Failed to reserve selected tiles.",
+          details: updateError.message,
+          hint:
+            updateError.message?.includes("reservation_expires_at") || updateError.code === "42703"
+              ? "Run migration 0002 in Supabase (reservation_expires_at column)."
+              : undefined,
+        },
+        { status: 500 },
+      );
+    }
+
+    if (!updatedRows || updatedRows.length !== uniqueTileIds.length) {
+      return NextResponse.json(
+        {
+          error:
+            "Not all tiles could be reserved (another request may have taken them, or rows are out of sync). Refresh and try again.",
+          expected: uniqueTileIds.length,
+          updated: updatedRows?.length ?? 0,
+        },
+        { status: 409 },
+      );
     }
 
     return NextResponse.json({

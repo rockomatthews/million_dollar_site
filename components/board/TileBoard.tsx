@@ -87,6 +87,13 @@ export function TileBoard() {
 
   const tiles = displayTiles;
 
+  /** Only IDs returned from Supabase can be reserved; merged “display” tiles for missing rows are not in DB. */
+  const seededIdSet = useMemo(() => new Set(apiTiles.map((t) => Number(t.id))), [apiTiles]);
+  const selectionIncludesUnseeded = useMemo(
+    () => [...selectedTileIds].some((id) => !seededIdSet.has(id)),
+    [selectedTileIds, seededIdSet],
+  );
+
   const seedMutation = useMutation({
     mutationFn: async () => {
       const response = await fetch("/api/tiles/seed", { method: "POST" });
@@ -127,9 +134,15 @@ export function TileBoard() {
         }),
       });
 
-      const payload = (await response.json()) as { error?: string };
+      const payload = (await response.json()) as {
+        error?: string;
+        details?: string;
+        hint?: string;
+        missingCount?: number;
+      };
       if (!response.ok) {
-        throw new Error(payload.error ?? "Failed to reserve selected tiles.");
+        const parts = [payload.error, payload.details, payload.hint].filter(Boolean);
+        throw new Error(parts.length > 0 ? parts.join(" — ") : "Failed to reserve selected tiles.");
       }
 
       const checkoutResponse = await fetch("/api/checkout-intents", {
@@ -239,6 +252,12 @@ export function TileBoard() {
       setNotice("Connect your wallet before buying tiles.");
       return;
     }
+    if (selectionIncludesUnseeded) {
+      setNotice(
+        "Selection includes tiles that are not in the database yet. Truncate tiles in Supabase, then Initialize to seed all 10,000 rows before purchasing.",
+      );
+      return;
+    }
     setIsBuyModalOpen(true);
   };
 
@@ -297,7 +316,7 @@ export function TileBoard() {
           <Button
             size="small"
             variant="contained"
-            disabled={selectedTiles.length === 0 || !isConnected}
+            disabled={selectedTiles.length === 0 || !isConnected || selectionIncludesUnseeded}
             onClick={handleBuySelected}
           >
             Buy Selected
