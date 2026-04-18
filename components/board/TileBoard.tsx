@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import { Alert, Box, Button, CircularProgress, Paper, Snackbar, Typography } from "@mui/material";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -20,12 +21,17 @@ import { TileOwnerModal } from "@/components/tile/TileOwnerModal";
 import { WalletConnectButton } from "@/components/wallet/WalletConnectButton";
 import { useAccount } from "wagmi";
 
+/** Must read clearly against GRID_SURFACE (#5a5a5a); avoid outline (breaks on 10px cells — use inset shadows). */
 const STATUS_COLORS: Record<Tile["status"], string> = {
-  available: "#9e9e9e",
-  reserved: "#a1887f",
-  sold: "#78909c",
-  listed: "#9575cd",
+  available: "#d5d5d5",
+  reserved: "#bcaaa4",
+  sold: "#90a4ae",
+  listed: "#b39ddb",
 };
+
+const GRID_LINE_SHADOW = "inset 0 0 0 1px rgba(0,0,0,0.5)";
+const SELECT_SHADOW = "inset 0 0 0 2px #0d47a1";
+const HOVER_SHADOW = "inset 0 0 0 2px #1976d2";
 
 export function TileBoard() {
   const [selectedTileIds, setSelectedTileIds] = useState<Set<number>>(new Set());
@@ -216,13 +222,37 @@ export function TileBoard() {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
       <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-        <Box>
-          <Typography variant="h4" sx={{ fontWeight: 700, color: "#fff" }}>
-            Million Dollar Crypto Grid
-          </Typography>
-          <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.85)" }}>
-            {CANVAS_WIDTH_PX}×{CANVAS_HEIGHT_PX}px canvas (1,000,000 pixels) · 10×10px tiles · {TILE_COUNT.toLocaleString()} tiles
-          </Typography>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2, minWidth: 0 }}>
+          <Box
+            sx={{
+              position: "relative",
+              width: { xs: 52, sm: 64 },
+              height: { xs: 52, sm: 64 },
+              flexShrink: 0,
+              borderRadius: 1,
+              overflow: "hidden",
+              bgcolor: "#000",
+              boxShadow: "0 2px 12px rgba(0,0,0,0.35)",
+            }}
+          >
+            <Image
+              src="/millionsAuction.png"
+              alt="millions.auction"
+              fill
+              sizes="(max-width: 600px) 52px, 64px"
+              priority
+              style={{ objectFit: "cover" }}
+            />
+          </Box>
+          <Box sx={{ minWidth: 0 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700, color: "#fff" }}>
+              millions.auction
+            </Typography>
+            <Typography variant="body2" sx={{ color: "rgba(255,255,255,0.85)" }}>
+              Million Dollar Crypto Grid · {CANVAS_WIDTH_PX}×{CANVAS_HEIGHT_PX}px (1M pixels) · {TILE_COUNT.toLocaleString()}{" "}
+              tiles
+            </Typography>
+          </Box>
         </Box>
         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 1 }}>
           <WalletConnectButton />
@@ -306,10 +336,12 @@ export function TileBoard() {
                 gridTemplateColumns: `repeat(${GRID_COLUMNS}, ${GRID_COL_TRACK_PX}px)`,
                 gridTemplateRows: `repeat(${GRID_ROWS}, ${GRID_ROW_TRACK_PX}px)`,
                 gap: 0,
-                backgroundColor: "#616161",
+                backgroundColor: "#5a5a5a",
               }}
             >
-              {tiles.map((tile) => (
+              {tiles.map((tile) => {
+                const selected = selectedTileIds.has(tile.id);
+                return (
                 <Box
                   key={tile.id}
                   role="button"
@@ -324,16 +356,21 @@ export function TileBoard() {
                   sx={{
                     minWidth: 0,
                     minHeight: 0,
+                    boxSizing: "border-box",
                     backgroundColor: STATUS_COLORS[tile.status],
                     cursor: "pointer",
-                    outline: selectedTileIds.has(tile.id) ? "2px solid #1565c0" : "none",
+                    // Inset shadows draw full frames on tiny cells; CSS outline often renders as corner artifacts.
+                    boxShadow: selected ? `${GRID_LINE_SHADOW}, ${SELECT_SHADOW}` : GRID_LINE_SHADOW,
+                    position: "relative",
+                    zIndex: selected ? 2 : 0,
                     "&:hover": {
-                      outline: "2px solid #1565c0",
-                      zIndex: 1,
+                      zIndex: 3,
+                      boxShadow: `${GRID_LINE_SHADOW}, ${HOVER_SHADOW}`,
                     },
                   }}
                 />
-              ))}
+              );
+              })}
             </Box>
           </Box>
         )}
