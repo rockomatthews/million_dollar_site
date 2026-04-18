@@ -341,12 +341,13 @@ export function TileBoard() {
 
       {incompleteDb ? (
         <Alert severity="warning" sx={{ bgcolor: "rgba(255,255,255,0.12)", color: "#fff" }}>
-          Database has {apiTiles.length.toLocaleString()} / {TILE_COUNT.toLocaleString()} tile rows (e.g. old seed). The
-          grid is drawn in full, but purchases need all rows. In Supabase:{" "}
+          Loaded {apiTiles.length.toLocaleString()} / {TILE_COUNT.toLocaleString()} tile rows from the API. The grid still
+          draws all cells, but checkout needs a full seed. If Supabase already has {TILE_COUNT.toLocaleString()} rows, hard
+          refresh after deploy. Otherwise run in Supabase SQL:{" "}
           <Box component="code" sx={{ color: "#ffecb3" }}>
             TRUNCATE public.tile_creatives, public.tiles RESTART IDENTITY CASCADE;
           </Box>{" "}
-          then use Initialize here.
+          then Initialize here.
         </Alert>
       ) : null}
 
