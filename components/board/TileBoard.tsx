@@ -284,25 +284,29 @@ export function TileBoard() {
         ) : (
           <Box
             sx={{
-              width: "fit-content",
-              maxWidth: "100%",
-              mx: "auto",
+              width: "100%",
+              display: "flex",
+              justifyContent: "center",
+              overflow: "auto",
             }}
           >
+            {/*
+              Exact 1000×1000px. Do not use gap/padding on the grid: 100×(10px+gaps) exceeded 1000px and broke the layout.
+            */}
             <Box
               sx={{
-                width: boardMetrics.width,
-                height: boardMetrics.height,
+                width: CANVAS_WIDTH_PX,
+                height: CANVAS_HEIGHT_PX,
+                aspectRatio: "1 / 1",
+                flexShrink: 0,
                 transform: `scale(${zoom}) translate(${translate.x}px, ${translate.y}px)`,
                 transformOrigin: "top center",
                 transition: "transform 200ms ease",
                 display: "grid",
                 gridTemplateColumns: `repeat(${GRID_COLUMNS}, ${GRID_COL_TRACK_PX}px)`,
                 gridTemplateRows: `repeat(${GRID_ROWS}, ${GRID_ROW_TRACK_PX}px)`,
-                gap: "1px",
+                gap: 0,
                 backgroundColor: "#616161",
-                p: "1px",
-                boxSizing: "border-box",
               }}
             >
               {tiles.map((tile) => (
