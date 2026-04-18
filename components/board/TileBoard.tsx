@@ -122,6 +122,11 @@ export function TileBoard() {
       if (!address || selectedTiles.length === 0) {
         throw new Error("Connect a wallet and select at least one tile.");
       }
+      if (selectionIncludesUnseeded) {
+        throw new Error(
+          "Selection includes tiles that are not in the database yet. Truncate tiles in Supabase, then Initialize to seed all 10,000 rows before purchasing.",
+        );
+      }
 
       const response = await fetch("/api/tiles/reserve", {
         method: "POST",
@@ -139,6 +144,7 @@ export function TileBoard() {
         details?: string;
         hint?: string;
         missingCount?: number;
+        unavailableTileIds?: number[];
       };
       if (!response.ok) {
         const parts = [payload.error, payload.details, payload.hint].filter(Boolean);
@@ -158,10 +164,14 @@ export function TileBoard() {
 
       const checkoutPayload = (await checkoutResponse.json()) as {
         error?: string;
+        details?: string;
         checkoutIntent?: { id: string; amountUsd: number };
       };
       if (!checkoutResponse.ok || !checkoutPayload.checkoutIntent) {
-        throw new Error(checkoutPayload.error ?? "Reservation succeeded, but checkout intent failed.");
+        const parts = [checkoutPayload.error, checkoutPayload.details].filter(Boolean);
+        throw new Error(
+          parts.length > 0 ? parts.join(" — ") : "Reservation succeeded, but checkout intent failed.",
+        );
       }
 
       const payResponse = await fetch(`/api/checkout-intents/${checkoutPayload.checkoutIntent.id}/pay`, {
@@ -433,6 +443,7 @@ export function TileBoard() {
         tiles={selectedTiles}
         open={isBuyModalOpen}
         isSubmitting={reserveMutation.isPending}
+        purchaseBlocked={selectionIncludesUnseeded}
         onConfirmPurchase={() => reserveMutation.mutate()}
         onClose={() => setIsBuyModalOpen(false)}
       />

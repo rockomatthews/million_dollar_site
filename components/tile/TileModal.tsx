@@ -18,6 +18,9 @@ interface TileModalProps {
   tiles: Tile[];
   open: boolean;
   isSubmitting?: boolean;
+  /** True when selection includes display-only cells (no DB row); purchase must stay disabled. */
+  purchaseBlocked?: boolean;
+  purchaseBlockedReason?: string;
   onConfirmPurchase: () => void;
   onClose: () => void;
 }
@@ -26,6 +29,8 @@ export function TileModal({
   tiles,
   open,
   isSubmitting = false,
+  purchaseBlocked = false,
+  purchaseBlockedReason = "These tiles are not in the database yet. Truncate and Initialize to seed all rows.",
   onConfirmPurchase,
   onClose,
 }: TileModalProps) {
@@ -86,11 +91,21 @@ export function TileModal({
               Visit linked site
             </Link>
           ) : null}
+
+          {purchaseBlocked ? (
+            <Typography variant="body2" color="warning.main">
+              {purchaseBlockedReason}
+            </Typography>
+          ) : null}
         </Box>
       </DialogContent>
       <DialogActions>
         {isAvailable ? (
-          <Button variant="contained" onClick={onConfirmPurchase} disabled={isSubmitting}>
+          <Button
+            variant="contained"
+            onClick={onConfirmPurchase}
+            disabled={isSubmitting || purchaseBlocked}
+          >
             {isSubmitting ? "Processing..." : `Buy ${tiles.length > 1 ? "Tiles" : "Tile"}`}
           </Button>
         ) : (

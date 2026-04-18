@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { formatPostgrestError, isMissingColumnError } from "@/server/db/formatPostgrestError";
 import { getSupabaseAdminClient } from "@/server/db/supabaseAdmin";
 
 interface ReserveTilesRequest {
@@ -31,7 +32,10 @@ export async function POST(request: Request) {
 
     if (selectError) {
       return NextResponse.json(
-        { error: "Failed to verify tile availability.", details: selectError.message },
+        {
+          error: "Failed to verify tile availability.",
+          details: formatPostgrestError(selectError),
+        },
         { status: 500 },
       );
     }
@@ -72,14 +76,14 @@ export async function POST(request: Request) {
       .select("id");
 
     if (updateError) {
+      const missingReservationCol = isMissingColumnError(updateError, "reservation_expires_at");
       return NextResponse.json(
         {
           error: "Failed to reserve selected tiles.",
-          details: updateError.message,
-          hint:
-            updateError.message?.includes("reservation_expires_at") || updateError.code === "42703"
-              ? "Run migration 0002 in Supabase (reservation_expires_at column)."
-              : undefined,
+          details: formatPostgrestError(updateError),
+          hint: missingReservationCol
+            ? "Apply supabase/migrations/0002_checkout_intents_and_reservations.sql so tiles.reservation_expires_at exists."
+            : undefined,
         },
         { status: 500 },
       );

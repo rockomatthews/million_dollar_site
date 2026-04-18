@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { TILE_PRICE_USD } from "@/lib/config/grid";
+import { formatPostgrestError } from "@/server/db/formatPostgrestError";
 import { getSupabaseAdminClient } from "@/server/db/supabaseAdmin";
 
 interface CreateCheckoutIntentBody {
@@ -26,7 +27,13 @@ export async function POST(request: Request) {
       .in("id", tileIds);
 
     if (tileError) {
-      return NextResponse.json({ error: "Failed to validate reserved tiles." }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: "Failed to validate reserved tiles.",
+          details: formatPostgrestError(tileError),
+        },
+        { status: 500 },
+      );
     }
 
     if (!tiles || tiles.length !== tileIds.length) {
@@ -69,7 +76,13 @@ export async function POST(request: Request) {
       .single();
 
     if (intentError || !intent) {
-      return NextResponse.json({ error: "Failed to create checkout intent." }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: "Failed to create checkout intent.",
+          details: intentError ? formatPostgrestError(intentError) : undefined,
+        },
+        { status: 500 },
+      );
     }
 
     const { error: tileUpdateError } = await supabase
@@ -81,7 +94,13 @@ export async function POST(request: Request) {
       .in("id", tileIds);
 
     if (tileUpdateError) {
-      return NextResponse.json({ error: "Checkout intent created but tile linkage failed." }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: "Checkout intent created but tile linkage failed.",
+          details: formatPostgrestError(tileUpdateError),
+        },
+        { status: 500 },
+      );
     }
 
     return NextResponse.json({
